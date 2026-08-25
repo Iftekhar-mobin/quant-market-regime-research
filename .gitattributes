@@ -1,0 +1,16 @@
+# Normalise to LF in the repository; check out with the platform default.
+* text=auto
+
+*.py    text eol=lf
+*.md    text eol=lf
+*.yaml  text eol=lf
+*.yml   text eol=lf
+*.toml  text eol=lf
+*.cfg   text eol=lf
+*.txt   text eol=lf
+*.sh    text eol=lf
+Makefile text eol=lf
+
+*.csv      text eol=lf
+*.parquet  binary
+*.png      binary

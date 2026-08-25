@@ -1,0 +1,86 @@
+# ---------------------------------------------------------------------------
+# Default experiment configuration.
+#
+# Every field here is overridable from the CLI (`qmr run --set key=value`) and
+# from the research console. A copy of the fully resolved configuration is
+# written next to every experiment so any result can be reproduced exactly.
+# ---------------------------------------------------------------------------
+
+experiment:
+  name: baseline
+  seed: 7
+  notes: ""
+
+data:
+  symbol: EURUSD
+  timeframe: H1
+  # Restrict the study window; null means "use everything available".
+  start: null
+  end: null
+  # Drop the first N bars so indicator warm-up never enters the study.
+  warmup_bars: 300
+
+features:
+  # Feature blocks to compute. Removing a block is a legitimate ablation.
+  blocks: [returns, trend, momentum, volatility, structure, volume, session]
+  # Horizons (in bars) used by the multi-scale return / volatility features.
+  return_horizons: [1, 3, 5, 10, 20, 50]
+  volatility_windows: [14, 50, 200]
+  trend_windows: [20, 50, 200]
+
+labeling:
+  # directional | triple_barrier
+  method: triple_barrier
+  horizon: 24            # maximum holding period, in bars
+  atr_window: 14
+  take_profit_atr: 1.0   # upper barrier, in ATR units
+  stop_loss_atr: 1.0     # lower barrier, in ATR units
+  deadband_atr: 0.25     # `directional` only: |return| below this becomes flat
+
+regime:
+  # none | rule | kmeans | gmm
+  method: kmeans
+  n_regimes: 4
+  # Feature columns used to describe the regime state space.
+  features: [trend_strength, vol_percentile, momentum_score, mean_reversion_score]
+  # Feed the detected regime to the learner as one-hot columns.
+  as_model_feature: true
+  # Fit one independent learner per regime instead of a single pooled learner.
+  specialised_models: false
+
+model:
+  # logistic | random_forest | hist_gradient_boosting | xgboost | lightgbm | mlp | lstm | gru
+  name: xgboost
+  params: {}
+  # Minimum class probability required before a position is taken.
+  decision_threshold: 0.50
+  # Balance the training classes by sample weighting.
+  class_balance: true
+
+validation:
+  # expanding | rolling
+  scheme: expanding
+  n_folds: 6
+  test_size: 0.12        # fraction of the sample per out-of-sample fold
+  min_train_size: 0.25   # fraction of the sample in the first training window
+  embargo_bars: 48       # purge window between train and test, in bars
+                         # (at least the label horizon, else labels leak)
+
+backtest:
+  initial_capital: 10000.0
+  # Round-trip trading friction expressed in basis points of notional.
+  cost_bps: 2.0
+  slippage_bps: 0.5
+  # Fraction of capital committed per position.
+  position_size: 1.0
+  # Enter on the open of the bar following the signal.
+  execution_lag: 1
+  # Hold a new position for at least this many bars before acting on a
+  # fresh signal. Set it to the label horizon: re-deciding every bar on a
+  # 12-bar-ahead forecast pays the spread twelve times for one opinion.
+  min_holding_bars: 24
+  bars_per_year: 6240    # H1 forex: 24 * 260
+
+evaluation:
+  bootstrap_samples: 1000
+  confidence_level: 0.95

@@ -1,0 +1,44 @@
+# Byte-compiled / cache
+__pycache__/
+*.py[cod]
+*.so
+.pytest_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Environments
+.venv/
+venv/
+env/
+.env
+
+# Packaging
+build/
+dist/
+*.egg-info/
+
+# Editors
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Research artefacts -----------------------------------------------------
+# Full market history is large and broker specific: keep it local.
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Experiment runs are reproducible from configs; do not version the outputs.
+experiments/*
+!experiments/.gitkeep
+
+models/
+logs/
+*.joblib
+*.h5
+*.keras
