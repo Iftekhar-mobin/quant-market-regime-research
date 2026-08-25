@@ -37,8 +37,8 @@ data/processed/*
 experiments/*
 !experiments/.gitkeep
 
-models/
-logs/
+/models/
+/logs/
 *.joblib
 *.h5
 *.keras
