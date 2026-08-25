@@ -243,6 +243,7 @@ kurtosis; a deflated Sharpe ratio that discounts for the number of trials.
 | [docs/methodology.md](docs/methodology.md) | Every assumption, and the reasoning behind it |
 | [docs/architecture.md](docs/architecture.md) | Module layout, data flow, extension points |
 | [docs/findings.md](docs/findings.md) | Full results and where the study goes next |
+| [reports/](reports/) | The result tables as CSV, with the commands that produced them |
 
 ---
 
