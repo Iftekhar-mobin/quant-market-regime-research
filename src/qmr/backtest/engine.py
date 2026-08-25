@@ -197,7 +197,13 @@ def run_backtest(
     net_return = gross_return - costs
     equity = config.initial_capital * (1.0 + net_return).cumprod()
 
+    # Buy and hold, charged one entry at the start and nothing thereafter — a
+    # position held for the whole window genuinely transacts once. Over a
+    # multi-year study that single charge is a rounding error, but leaving it
+    # out entirely would hand the benchmark an advantage the strategy does not
+    # get.
     benchmark_return = bar_return.copy()
+    benchmark_return.iloc[0] -= cost_rate
     benchmark_equity = config.initial_capital * (1.0 + benchmark_return).cumprod()
 
     trades = _extract_trades(positions, execution_price, net_return)
