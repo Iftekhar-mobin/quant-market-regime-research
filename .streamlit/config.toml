@@ -1,0 +1,16 @@
+# The console commits to a single light theme so the Streamlit chrome and the
+# Plotly charts share one palette. Chart colours are defined once in app/theme.py.
+[theme]
+base = "light"
+primaryColor = "#2a78d6"
+backgroundColor = "#f9f9f7"
+secondaryBackgroundColor = "#fcfcfb"
+textColor = "#0b0b0b"
+font = "sans serif"
+
+[server]
+headless = true
+fileWatcherType = "auto"
+
+[browser]
+gatherUsageStats = false
