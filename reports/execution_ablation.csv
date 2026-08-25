@@ -1,0 +1,6 @@
+arm,sharpe,cagr,max_drawdown,trades,directional_precision,long_label_share,short_label_share
+"reference (symmetric barriers, 24-bar hold)",-0.469,-0.0388,-0.2678,1191,0.5111,0.499,0.501
+no minimum holding period,-5.552,-0.3132,-0.8894,4905,0.5111,0.499,0.501
+asymmetric barriers 1.5/1.0,-1.125,-0.0677,-0.3678,888,0.5295,0.396,0.6
+both defects together,-4.682,-0.1748,-0.679,2592,0.5295,0.396,0.6
+zero transaction cost,0.846,0.0647,-0.0869,1191,0.5111,0.499,0.501

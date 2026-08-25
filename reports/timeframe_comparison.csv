@@ -1,0 +1,4 @@
+timeframe,horizon_bars,oos_bars,directional_precision,sharpe,cagr,max_drawdown,trades,return_per_trade_bps,buy_and_hold_sharpe
+H1,24,45306,0.513,-1.445,-0.1025,-0.5847,1428,-3.81,0.07
+H4,12,17340,0.5203,-0.603,-0.0336,-0.3693,601,-5.26,-0.137
+D1,10,3528,0.5039,0.027,0.0001,-0.1583,114,0.15,-0.076
