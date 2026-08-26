@@ -1,0 +1,80 @@
+experiment:
+  name: demo
+  seed: 7
+  notes: ''
+data:
+  symbol: EURUSD
+  timeframe: H1
+  start: '2023-10-20'
+  end: null
+  warmup_bars: 300
+features:
+  blocks:
+  - returns
+  - trend
+  - momentum
+  - volatility
+  - structure
+  - volume
+  - session
+  return_horizons:
+  - 1
+  - 3
+  - 5
+  - 10
+  - 20
+  - 50
+  volatility_windows:
+  - 14
+  - 50
+  - 200
+  trend_windows:
+  - 20
+  - 50
+  - 200
+labeling:
+  method: triple_barrier
+  horizon: 24
+  atr_window: 14
+  take_profit_atr: 1.0
+  stop_loss_atr: 1.0
+  deadband_atr: 0.25
+  primary: ma_crossover
+regime:
+  method: kmeans
+  n_regimes: 4
+  features:
+  - trend_strength
+  - vol_percentile
+  - momentum_score
+  - mean_reversion_score
+  as_model_feature: true
+  specialised_models: false
+model:
+  name: random_forest
+  params: {}
+  decision_threshold: 0.5
+  class_balance: true
+  top_k_features: null
+  n_seeds: 1
+validation:
+  scheme: expanding
+  n_folds: 3
+  test_size: 0.12
+  min_train_size: 0.25
+  embargo_bars: 48
+backtest:
+  initial_capital: 10000.0
+  cost_bps: 2.0
+  slippage_bps: 0.5
+  position_size: 1.0
+  execution_lag: 1
+  min_holding_bars: 24
+  bars_per_year: 6240
+  volatility_target: null
+  volatility_window: 100
+  max_leverage: 3.0
+  session_hours: []
+evaluation:
+  bootstrap_samples: 300
+  confidence_level: 0.95

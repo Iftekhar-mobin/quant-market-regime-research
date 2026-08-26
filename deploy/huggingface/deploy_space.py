@@ -1,5 +1,9 @@
 """Build and push the Hugging Face Space for this project.
 
+The Space runs as a Docker Space: Hugging Face retired the managed Streamlit
+SDK, so the console is containerised and serves on the port declared in
+README.md.
+
 The Space is a curated subset of the repository: the library, the console, the
 configuration, the sample datasets, and one pre-computed study so the Results
 and Signals tabs have something to show on a first visit. Full market history,
@@ -68,7 +72,8 @@ def build(staging: Path) -> None:
     # Space metadata README (the YAML front matter is what configures the Space).
     shutil.copy2(HERE / "README.md", staging / "README.md")
     shutil.copy2(HERE / "requirements.txt", staging / "requirements.txt")
-    print("  + README.md, requirements.txt")
+    shutil.copy2(HERE / "Dockerfile", staging / "Dockerfile")
+    print("  + README.md, requirements.txt, Dockerfile")
 
     # Writable directories the pipeline expects to exist.
     for rel in ("data/raw", "data/processed", "experiments", "reports"):
@@ -109,7 +114,7 @@ def push(staging: Path, repo_id: str, private: bool) -> int:
     api.create_repo(
         repo_id=repo_id,
         repo_type="space",
-        space_sdk="streamlit",
+        space_sdk="docker",
         private=private,
         exist_ok=True,
     )

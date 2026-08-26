@@ -3,9 +3,8 @@ title: Quantitative Market Regime Research
 emoji: 📉
 colorFrom: blue
 colorTo: gray
-sdk: streamlit
-sdk_version: 1.48.0
-app_file: app/main.py
+sdk: docker
+app_port: 7860
 pinned: false
 license: mit
 short_description: Walk-forward research console for market-regime trading studies

@@ -36,6 +36,9 @@ data/processed/*
 # Experiment runs are reproducible from configs; do not version the outputs.
 experiments/*
 !experiments/.gitkeep
+# ...except one small pre-computed study, so the deployed console has
+# something to show on a cold start instead of an empty Results tab.
+!experiments/demo_eurusd_h1/
 
 /models/
 /logs/
