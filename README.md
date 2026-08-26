@@ -140,6 +140,10 @@ to push next is set out in [docs/findings.md](docs/findings.md) §6.
 qmr console          # or: streamlit run app/main.py
 ```
 
+A hosted instance runs on Streamlit Community Cloud — see
+[docs/deployment.md](docs/deployment.md) for how it is deployed, and for why a
+Hugging Face Space is no longer a free option for anything that runs Python.
+
 | Tab | What it is for |
 |---|---|
 | **Overview** | The question, the pipeline, and the decisions that determine the answer |
@@ -255,6 +259,7 @@ cross-instrument holdout with a sign test.
 | [docs/methodology.md](docs/methodology.md) | Every assumption, and the reasoning behind it |
 | [docs/architecture.md](docs/architecture.md) | Module layout, data flow, extension points |
 | [docs/findings.md](docs/findings.md) | Full results, the 28-arm ledger, and where the study goes next |
+| [docs/deployment.md](docs/deployment.md) | Hosting the console, and why not a Hugging Face Space |
 | [reports/](reports/) | Result tables as CSV, with the commands that produced them |
 
 ---
