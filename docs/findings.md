@@ -148,14 +148,26 @@ sign flips when fold boundaries move by a handful of bars is noise. The honest
 conclusion is that this study cannot resolve a regime effect of the size that
 might plausibly exist — in either direction.
 
-The regimes themselves are well behaved: k-means on the four descriptors finds
-persistent, interpretable states with bar-to-bar persistence above 95% and mean
-run lengths in the tens of bars. Buy-and-hold return and volatility differ
-materially between them. They are real states.
+The states themselves are interpretable and economically distinct — buy-and-hold
+return and volatility differ materially between them. But measured on EURUSD H1
+from 2018, k-means with four states gives:
 
-They do not help because directional precision is roughly constant across them.
-The states separate *market conditions*, which the feature set already encodes
-directly. They do not separate the bars where the model is right from the bars
+| | |
+|---|---|
+| Bar-to-bar persistence | **90.8%** |
+| Median run length | **4 bars** |
+| Mean run length | 10.8 bars |
+| Regime switches over the window | 4,672 |
+
+**That is the second reason they do not help, and it is the more damning one.**
+A median run of 4 bars against a 24-bar minimum holding period means the regime
+usually changes several times *inside a single position*. A state that cannot be
+held cannot be traded on, however well it separates the data — the console warns
+about exactly this below 90% persistence, and 90.8% is barely clear of it.
+
+The first reason is that directional precision is roughly constant across the
+states. They separate *market conditions*, which the feature set already encodes
+directly; they do not separate the bars where the model is right from the bars
 where it is wrong.
 
 ---

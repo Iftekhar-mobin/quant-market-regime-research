@@ -42,3 +42,6 @@ experiments/*
 *.joblib
 *.h5
 *.keras
+
+# Hugging Face Space staging payload (rebuilt by deploy_space.py)
+deploy/huggingface/_staging/
