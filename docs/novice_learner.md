@@ -621,50 +621,52 @@ Run `qmr run` and watch it appear. You are now editing the code.
 study. Compare the Sharpe ratio to the default. You have just reproduced the
 central finding of the whole project — the signal is real, the spread is bigger.
 
-**3. Break causality on purpose, then fix it.** This is the most valuable
-exercise here. Do both halves.
+**3. Break causality on purpose and measure what it is worth.** This is the most
+valuable exercise here, and it comes as a script so you never have to edit
+`src/`:
 
-*3a — the subtle version.* In `swing_points`, change
-`centre_high = high.shift(right)` to `centre_high = high` (and the same for
-`centre_low`). Run a study. On EURUSD H1 from 2020, random forest, no regimes,
-3 folds, the result moves like this:
-
-| | Directional precision | Sharpe | Max drawdown |
-|---|---|---|---|
-| Honest (pivot reported late) | 50.7% | −1.13 | −19.7% |
-| Leaky (pivot reported in place) | 51.0% | −0.76 | −15.9% |
-
-Better on every measure — and completely fake. Note how *undramatic* it looks.
-**That is the real lesson.** A subtle leak does not announce itself with an
-absurd equity curve; it just makes your results a bit better, which is exactly
-why you would believe it. Only 5 of the ~84 features were affected, and the leak
-was only 5 bars long against a 24-bar label horizon.
-
-*3b — the blatant version, so you know what a big leak looks like.* At the very
-bottom of `build_features` in `features/pipeline.py`, the last line is
-`return features`. Replace it with these two:
-
-```python
-features["tomorrow_close"] = features["close"].shift(-5) / features["close"] - 1.0
-return features.dropna()
+```bash
+python scripts/demo_lookahead_bias.py --start 2020-01-01
 ```
 
-(The `dropna()` clears the 5 empty rows at the end that `shift(-5)` creates.)
+It runs three full studies that differ in exactly one thing — what the features
+are allowed to know — and prints them side by side:
 
-That hands the model the price move over the next 5 bars — the answer, as an
-input. Run a study:
+```
+Arm         Precision    Sharpe      CAGR    Max DD   Trades   Top feature
+------------------------------------------------------------------------------
+honest          50.7%     -1.13     -8.7%    -19.7%      455   realised_vol_14
+swing           51.0%     -0.76     -6.0%    -15.9%      456   realised_vol_14
+future          76.9%     +3.87     36.0%     -5.1%      525   tomorrow_close
+```
 
-| | Directional precision | Sharpe | CAGR | Max drawdown |
-|---|---|---|---|---|
-| Honest | 50.7% | −1.13 | −8.7% | −19.7% |
-| Future price as a feature | **76.9%** | **+3.87** | **+36.0%** | −5.1% |
+- **honest** — the pipeline as shipped.
+- **swing** — swing pivots reported on the bar they occurred instead of the bar
+  that confirms them. A 5-bar leak, through only 5 of the ~84 features.
+- **future** — the price move over the next 5 bars handed to the model as an
+  input. The answer, supplied as a question.
 
-A Sharpe of 3.87 and a 5% drawdown. If you ever see numbers like that from a
-retail backtest, this is very often why. Check the feature-importance chart in
-the console: `tomorrow_close` sits at the top.
+Two things to take from that table.
 
-**Undo both changes when you are done.** `git diff` shows what you touched;
-`git checkout -- src/` throws it all away.
+*The subtle leak is the dangerous one.* It is worth only +0.38 Sharpe. It does
+not produce an absurd equity curve; it just makes everything a little better,
+which is precisely why you would believe it and ship it. Most real leaks look
+like this.
+
+*The blatant leak is what a fantasy looks like.* Sharpe 3.87, a 5% drawdown, and
+`tomorrow_close` sitting at the top of the feature-importance chart. If a retail
+backtest ever shows you numbers like that, this is very often why.
+
+Neither one raised an error or printed a warning. Nothing in the output says
+"this result is fake" — you have to know to check. That is the whole lesson.
+
+Open `scripts/demo_lookahead_bias.py` afterwards and read `leaky_swing_points`:
+the only difference from the shipped version is that two lines no longer say
+`.shift(right)`.
+
+(You can run one arm at a time with `--arm swing`, or on other data with
+`--symbol GOLD`. Your exact numbers will differ from the table above if you
+change the window or the instrument; the *ordering* will not.)
 
 **4. Write your own indicator.** Add to `indicators.py`:
 
