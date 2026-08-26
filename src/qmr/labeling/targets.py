@@ -51,6 +51,10 @@ class LabelResult:
     holding_bars: pd.Series
     barrier_hit: pd.Series
     method: str
+    # `meta` only: the primary rule's direction at each bar. The runner uses
+    # it to mask predictions, so the learner can veto a trade but never
+    # invent one the primary rule did not propose.
+    primary: pd.Series | None = None
 
     @property
     def distribution(self) -> pd.Series:
@@ -165,6 +169,106 @@ def _triple_barrier_labels(frame: pd.DataFrame, config: LabelConfig) -> LabelRes
     )
 
 
+def _meta_labels(frame: pd.DataFrame, config: LabelConfig) -> LabelResult:
+    """Meta-labelling: the rule picks the direction, the learner picks the trades.
+
+    Direct direction prediction is a hard problem, and on intraday FX the
+    accuracy it reaches (around 51%) does not cover the spread. Meta-labelling
+    changes the question. A primary rule — here a moving-average crossover —
+    proposes both the direction and the timing. The learner is then asked only:
+    *will this particular trade work?*
+
+    That is an easier question for three reasons. The direction is no longer the
+    learner's problem. The training set contains only bars where a trade was
+    actually proposed, so it is not diluted by the 90% of bars where nothing was
+    happening. And a filter that removes bad trades improves precision and cuts
+    turnover at the same time, which is exactly the pair of levers this study
+    needs.
+
+    The label is the primary side when the trade would have won, and 0 when it
+    would have lost. Bars where the rule proposes nothing are dropped.
+
+    Reference: López de Prado, *Advances in Financial Machine Learning*, ch. 3.
+    """
+    from qmr.models.baselines import build_baseline_signals
+
+    primary = build_baseline_signals(config.primary, frame).reindex(frame.index).fillna(0.0)
+
+    close = frame["close"].to_numpy(dtype=float)
+    high = frame["high"].to_numpy(dtype=float)
+    low = frame["low"].to_numpy(dtype=float)
+    side = primary.to_numpy(dtype=float)
+    atr_values = ind.atr(frame["high"], frame["low"], frame["close"], config.atr_window).to_numpy()
+
+    n = len(close)
+    horizon = int(config.horizon)
+
+    labels = np.zeros(n, dtype=np.int64)
+    forward_return = np.full(n, np.nan)
+    holding = np.full(n, np.nan)
+    barrier = np.full(n, "none", dtype=object)
+
+    for i in range(n - horizon):
+        direction = side[i]
+        entry = close[i]
+        volatility = atr_values[i]
+        if direction == 0 or not np.isfinite(volatility) or volatility <= 0 or entry <= 0:
+            continue
+
+        # Barriers are placed in the direction the rule wants to trade.
+        if direction > 0:
+            take_profit = entry + config.take_profit_atr * volatility
+            stop_loss = entry - config.stop_loss_atr * volatility
+        else:
+            take_profit = entry - config.take_profit_atr * volatility
+            stop_loss = entry + config.stop_loss_atr * volatility
+
+        won = 0
+        exit_price = close[i + horizon]
+        bars_held = horizon
+        touched = "time"
+
+        for step in range(1, horizon + 1):
+            j = i + step
+            if direction > 0:
+                hit_tp, hit_sl = high[j] >= take_profit, low[j] <= stop_loss
+            else:
+                hit_tp, hit_sl = low[j] <= take_profit, high[j] >= stop_loss
+
+            if hit_tp and hit_sl:
+                # Unknown intrabar path: assume the loss.
+                won, exit_price, bars_held, touched = 0, stop_loss, step, "both"
+                break
+            if hit_tp:
+                won, exit_price, bars_held, touched = 1, take_profit, step, "profit"
+                break
+            if hit_sl:
+                won, exit_price, bars_held, touched = 0, stop_loss, step, "stop"
+                break
+
+        if touched == "time":
+            # No barrier touched: judge the trade on where it finished.
+            won = 1 if (exit_price - entry) * direction > 0 else 0
+
+        labels[i] = int(direction) if won else 0
+        forward_return[i] = (exit_price / entry - 1.0) * direction
+        holding[i] = bars_held
+        barrier[i] = touched
+
+    index = frame.index
+    # Keep only bars where the rule actually proposed a trade.
+    proposed = (side != 0) & np.isfinite(forward_return)
+
+    return LabelResult(
+        labels=pd.Series(labels, index=index)[proposed],
+        forward_return=pd.Series(forward_return, index=index)[proposed],
+        holding_bars=pd.Series(holding, index=index)[proposed],
+        barrier_hit=pd.Series(barrier, index=index)[proposed],
+        method="meta",
+        primary=primary[proposed],
+    )
+
+
 def build_labels(frame: pd.DataFrame, config: LabelConfig | None = None) -> LabelResult:
     """Build targets for every bar in ``frame``."""
     config = config or LabelConfig()
@@ -173,9 +277,12 @@ def build_labels(frame: pd.DataFrame, config: LabelConfig | None = None) -> Labe
         result = _directional_labels(frame, config)
     elif config.method == "triple_barrier":
         result = _triple_barrier_labels(frame, config)
+    elif config.method == "meta":
+        result = _meta_labels(frame, config)
     else:
         raise ValueError(
-            f"Unknown labelling method {config.method!r}. Use 'directional' or 'triple_barrier'."
+            f"Unknown labelling method {config.method!r}. "
+            f"Use 'directional', 'triple_barrier' or 'meta'."
         )
 
     summary = result.summary()

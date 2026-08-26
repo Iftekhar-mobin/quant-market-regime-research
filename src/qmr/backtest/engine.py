@@ -159,6 +159,64 @@ def enforce_min_holding(signals: pd.Series, min_bars: int) -> pd.Series:
     return pd.Series(held, index=signals.index, name=signals.name)
 
 
+def apply_session_filter(signals: pd.Series, hours: list[int]) -> pd.Series:
+    """Allow new entries only during the given hours of the day.
+
+    Spreads on FX are widest in the thin hours, and a constant cost assumption
+    understates that. Restricting entries to liquid sessions is the cheap way to
+    stop a strategy paying its worst prices; an existing position is left alone,
+    because closing it early is a different decision.
+    """
+    if not hours:
+        return signals
+
+    allowed = signals.index.hour.isin(hours)
+    filtered = signals.where(allowed, other=np.nan)
+    # Outside the session, hold whatever was already on rather than flattening.
+    return filtered.ffill().fillna(0.0)
+
+
+def volatility_scalar(
+    frame: pd.DataFrame,
+    target: float,
+    window: int,
+    bars_per_year: int,
+    max_leverage: float,
+) -> pd.Series:
+    """Position multiplier that targets a constant annualised volatility.
+
+    Sharpe is return divided by volatility. A strategy that holds one unit
+    through both calm and violent markets earns most of its variance in the
+    violent ones without earning proportionally more return, so its Sharpe is
+    dragged down by periods it was never compensated for. Sizing inversely to
+    trailing volatility removes that drag.
+
+    This is not a way to manufacture return — it does not change the sign of
+    anything — but it is one of the few genuinely free improvements in
+    portfolio construction, and it is standard practice at every systematic
+    fund.
+
+    The estimate uses returns up to bar ``t`` and is then shifted a further bar,
+    so the multiplier applied at execution was knowable beforehand.
+    """
+    log_return = np.log(frame["close"]).diff()
+    realised = log_return.rolling(window).std(ddof=0) * np.sqrt(bars_per_year)
+    scalar = target / realised.replace(0.0, np.nan)
+    return scalar.shift(1).clip(upper=max_leverage).fillna(0.0)
+
+
+def _size_at_entry(side: pd.Series, scalar: pd.Series) -> pd.Series:
+    """Fix the position multiplier at entry and hold it for the trade.
+
+    Rebalancing to the volatility target on every bar would charge transaction
+    cost for each drift in the estimate. A real system sizes when it opens and
+    leaves the position alone, so that is what is modelled here.
+    """
+    entries = side.ne(side.shift()) & side.ne(0)
+    held = scalar.where(entries).ffill().fillna(0.0)
+    return held.where(side != 0, 0.0)
+
+
 def run_backtest(
     frame: pd.DataFrame,
     signals: pd.Series,
@@ -179,10 +237,26 @@ def run_backtest(
     bars_per_year = bars_per_year or config.bars_per_year
 
     aligned = signals.reindex(frame.index).fillna(0.0).astype(float).clip(-1.0, 1.0)
+    aligned = apply_session_filter(aligned, config.session_hours)
     aligned = enforce_min_holding(aligned, config.min_holding_bars)
 
     # The signal on bar t is acted on at the open of bar t + lag.
-    positions = (aligned.shift(config.execution_lag).fillna(0.0) * config.position_size)
+    side = aligned.shift(config.execution_lag).fillna(0.0)
+
+    size = pd.Series(config.position_size, index=frame.index)
+    if config.volatility_target:
+        size = config.position_size * _size_at_entry(
+            side,
+            volatility_scalar(
+                frame,
+                config.volatility_target,
+                config.volatility_window,
+                bars_per_year,
+                config.max_leverage,
+            ),
+        )
+
+    positions = side * size
 
     # Open-to-open returns match the execution convention above.
     execution_price = frame["open"]
@@ -206,7 +280,10 @@ def run_backtest(
     benchmark_return.iloc[0] -= cost_rate
     benchmark_equity = config.initial_capital * (1.0 + benchmark_return).cumprod()
 
-    trades = _extract_trades(positions, execution_price, net_return)
+    # Trades are delimited by the discrete side, not the sized position: a
+    # change in size is not a new trade, and counting it as one would inflate
+    # the trade count and every per-trade statistic derived from it.
+    trades = _extract_trades(side, execution_price, net_return)
 
     metrics = performance_metrics(
         net_return, equity, positions, trades, bars_per_year=bars_per_year

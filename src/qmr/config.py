@@ -60,6 +60,9 @@ class LabelConfig:
     take_profit_atr: float = 1.0
     stop_loss_atr: float = 1.0
     deadband_atr: float = 0.25
+    # `meta` only: the rule-based strategy that supplies the direction. The
+    # learner then decides which of its trades are worth taking.
+    primary: str = "ma_crossover"
 
 
 @dataclass
@@ -84,6 +87,11 @@ class ModelConfig:
     params: dict[str, Any] = field(default_factory=dict)
     decision_threshold: float = 0.50
     class_balance: bool = True
+    # Keep only the k most important features, ranked on the training fold.
+    # None keeps all of them.
+    top_k_features: int | None = None
+    # Average the probabilities of this many models, differing only by seed.
+    n_seeds: int = 1
 
 
 @dataclass
@@ -104,6 +112,14 @@ class BacktestConfig:
     execution_lag: int = 1
     min_holding_bars: int = 24
     bars_per_year: int = 6240
+    # Annualised volatility to size positions towards. None disables sizing and
+    # every position is taken at full size.
+    volatility_target: float | None = None
+    volatility_window: int = 100
+    max_leverage: float = 3.0
+    # Restrict new entries to these hours (exchange/UTC hour of the bar). Empty
+    # means trade around the clock.
+    session_hours: list[int] = field(default_factory=list)
 
 
 @dataclass

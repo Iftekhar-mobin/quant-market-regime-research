@@ -320,6 +320,7 @@ class DirectionalModel:
 
         self.params = {**self.spec.defaults, **(config.params or {})}
         self.feature_names_: list[str] = []
+        self.selected_features_: list[str] = []
         self.classes_: list[int] = []
         self._estimator = None
 
@@ -332,7 +333,38 @@ class DirectionalModel:
         return self.spec.label
 
     # -- training ---------------------------------------------------------
+    def _select_features(self, X: pd.DataFrame, y: pd.Series) -> list[str]:
+        """Rank features on this training fold and keep the strongest k.
+
+        Eighty features over a signal this weak is mostly noise, and every
+        useless column is one more chance for a tree to split on an accident.
+        The ranking is fitted on the training window only, like everything else,
+        so the selection cannot see the test period.
+        """
+        k = self.config.top_k_features
+        if not k or k >= X.shape[1]:
+            return list(X.columns)
+
+        from sklearn.ensemble import RandomForestClassifier
+
+        probe = RandomForestClassifier(
+            n_estimators=120,
+            max_depth=6,
+            min_samples_leaf=50,
+            random_state=self.seed,
+            n_jobs=-1,
+        )
+        probe.fit(X.fillna(X.median(numeric_only=True)).fillna(0.0), y)
+        ranked = pd.Series(probe.feature_importances_, index=X.columns).sort_values(
+            ascending=False
+        )
+        chosen = ranked.head(k).index.tolist()
+        log.info("Selected %d of %d features; top 3: %s", k, X.shape[1], chosen[:3])
+        return chosen
+
     def fit(self, X: pd.DataFrame, y: pd.Series) -> DirectionalModel:
+        self.selected_features_ = self._select_features(X, y)
+        X = X[self.selected_features_]
         self.feature_names_ = list(X.columns)
         encoded = y.map({value: position for position, value in enumerate(CLASS_ORDER)})
 
@@ -378,6 +410,9 @@ class DirectionalModel:
     def predict_proba(self, X: pd.DataFrame) -> pd.DataFrame:
         if self._estimator is None:
             raise RuntimeError("Model has not been fitted.")
+
+        # Apply the same column selection that fit() used.
+        X = X[self.selected_features_]
 
         if self.is_sequence_model:
             matrix = self._scaler.transform(
@@ -427,5 +462,54 @@ class DirectionalModel:
         return (series / total if total > 0 else series).sort_values(ascending=False)
 
 
-def build_model(config: ModelConfig, seed: int = 7) -> DirectionalModel:
+class SeedEnsemble:
+    """Average the probabilities of several models that differ only by seed.
+
+    A single tree ensemble on a weak signal produces probabilities that wobble
+    near the decision threshold for reasons that have nothing to do with the
+    market. Every wobble across the threshold is a position flip, and every flip
+    pays the spread. Averaging over seeds damps the wobble without changing the
+    expected prediction, so it buys lower turnover at no cost in accuracy.
+
+    It is the cheapest variance reduction available here, which matters because
+    this study is limited by cost per unit of signal rather than by signal.
+    """
+
+    def __init__(self, config: ModelConfig, seed: int = 7) -> None:
+        self.config = config
+        self.members = [
+            DirectionalModel(config, seed=seed + offset) for offset in range(config.n_seeds)
+        ]
+
+    @property
+    def label(self) -> str:
+        return f"{self.members[0].label} x{len(self.members)} seeds"
+
+    def fit(self, X: pd.DataFrame, y: pd.Series) -> SeedEnsemble:
+        for member in self.members:
+            member.fit(X, y)
+        return self
+
+    def predict_proba(self, X: pd.DataFrame) -> pd.DataFrame:
+        total = None
+        for member in self.members:
+            probabilities = member.predict_proba(X)
+            total = probabilities if total is None else total + probabilities
+        return total / len(self.members)
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        winner = self.predict_proba(X).to_numpy().argmax(axis=1)
+        return pd.Series([CLASS_ORDER[i] for i in winner], index=X.index, name="prediction")
+
+    def feature_importance(self) -> pd.Series | None:
+        parts = [m.feature_importance() for m in self.members]
+        parts = [p for p in parts if p is not None]
+        if not parts:
+            return None
+        return pd.concat(parts, axis=1).mean(axis=1).sort_values(ascending=False)
+
+
+def build_model(config: ModelConfig, seed: int = 7):
+    if config.n_seeds > 1:
+        return SeedEnsemble(config, seed=seed)
     return DirectionalModel(config, seed=seed)

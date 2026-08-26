@@ -4,11 +4,12 @@ A research framework for testing whether **market regimes** — persistent state
 of trend, volatility and structure — make systematic strategies more robust out
 of sample.
 
-It is built as a study, not as a trading bot. Every number it reports comes from
-purged walk-forward validation with an embargo, priced through an execution
-model with realistic costs, and accompanied by a confidence interval and a
-correction for how many configurations were tried. The framework is designed to
-be able to return the answer "no", and on the sample studied here it does.
+It is built as a study, not as a trading bot. Every number comes from purged
+walk-forward validation with an embargo, priced through an execution model with
+realistic costs, and reported with a confidence interval and a correction for
+how many configurations were tried. The framework is designed to be able to
+return the answer "no" — and on the sample studied here, it does, including
+about its own most promising result.
 
 ```
    data  ->  causal features  ->  regime detection  ->  triple-barrier labels
@@ -33,95 +34,103 @@ the only difference.
 
 ## Findings
 
-Studied on **EURUSD H1, 2018–2026**: 6 expanding walk-forward folds, 24-bar
-label horizon, 48-bar embargo, minimum holding period equal to the label
-horizon, and 2.5 bps charged on every change in position (5.0 bps a round
-trip). Four learners crossed with two regime settings; ~36,000 out-of-sample
-bars per arm.
+EURUSD H1, 2018–2026. Six expanding folds, 24-bar label horizon, 48-bar embargo,
+minimum holding period equal to the label horizon, 2.5 bps charged on every
+change in position (5.0 bps a round trip). ~36,000 out-of-sample bars per arm.
 
-### 1. Every learner finds the same tiny directional edge
+### 1. Every learner finds the same small edge
 
 | Learner | Regimes | Directional precision | Sharpe (OOS) | CAGR | Max drawdown |
 |---|---|---|---|---|---|
-| Random forest | none | 51.1% | −0.47 | −3.9% | −26.8% |
-| Random forest | k-means | 50.9% | −0.76 | −6.1% | −33.8% |
-| LightGBM | none | 51.2% | −0.84 | −7.0% | −36.0% |
-| LightGBM | k-means | 51.2% | −1.10 | −9.0% | −45.6% |
-| XGBoost | k-means | 51.4% | −1.37 | −11.0% | −51.5% |
-| XGBoost | none | 51.4% | −1.47 | −11.8% | −53.4% |
-| Logistic regression | none | 50.9% | −1.64 | −12.6% | −57.4% |
-| Logistic regression | k-means | 50.7% | −1.79 | −13.7% | −59.1% |
+| Random forest | none | 51.00% | **−0.37** | −3.2% | −26.9% |
+| Random forest | k-means | 51.00% | −0.77 | −6.1% | −30.9% |
+| LightGBM | k-means | 51.21% | −1.37 | −11.1% | −50.8% |
+| XGBoost | k-means | 51.42% | −1.40 | −11.0% | −50.2% |
+| LightGBM | none | 51.46% | −1.57 | −12.6% | −55.8% |
+| Logistic regression | k-means | 50.73% | −1.66 | −12.8% | −57.1% |
+| XGBoost | none | 51.50% | −1.71 | −13.6% | −57.5% |
+| Logistic regression | none | 50.86% | −1.79 | −13.7% | −60.4% |
 
-Directional precision lands between **50.7% and 51.4%** for every learner, from
-a regularised logit to a tuned gradient-boosted ensemble. The spread across
-model families is smaller than the spread across folds within any one of them.
-Whatever signal is in these features, a linear model extracts essentially all of
-it, and the choice of learner is not what is limiting the result.
+Precision spans **50.7% to 51.5%** across four model families, from a
+regularised logit to two gradient-boosting libraries. A linear model extracts
+essentially all the signal these features contain; the choice of learner is not
+what limits the result.
 
-### 2. The edge is real. The spread is bigger.
+### 2. The signal is real. The spread is bigger.
 
-Running the identical signal with costs switched off separates the two:
+The identical signal, run with costs switched off:
 
-| | Gross, per trade | Cost, per trade | Net, per trade | Sharpe |
+| | Total return | Per trade | Sharpe | Max drawdown |
 |---|---|---|---|---|
-| Reference | +3.70 bps | −5.00 bps | **−1.73 bps** | −0.47 |
-| Zero-cost arm | +3.70 bps | 0 | +3.70 bps | **+0.85** |
+| Reference | −17.1% | **−1.41 bps** | −0.37 | −26.9% |
+| Zero transaction cost | +51.6% | **+4.28 bps** | **+0.95** | −9.7% |
 
-The signal is genuinely worth something: with friction removed it earns a Sharpe
-of 0.85 and never draws down more than 9%. It is simply worth less than the toll.
-Closing a 1.3 bps per-trade gap needs roughly **35% more gross edge** — in
-hit-rate terms, moving from about 51% to about 55%.
+Out of sample, on bars it had never seen, the model earns **+4.28 bps per trade
+— a Sharpe of 0.95 with a single-digit drawdown**. The round trip costs 5.0 bps.
+The edge is real and smaller than the toll.
 
-That is the central result, and it is why this repository prints return per
-trade beside precision. A 51% hit rate is a fine headline for a classification
-paper and a losing strategy in a brokerage account.
+The break-even hit rate at these costs is about **55%**. The models reach 51%.
+That gap is the central result, and it is why this repository prints return per
+trade beside precision.
 
-### 3. Transaction friction dominates everything else
+### 3. Execution assumptions move the result more than the model does
 
-An ablation on the identical window, learner, horizon, folds and seed, changing
-only the named assumption:
+Identical window, learner, horizon, folds and seed — only the named assumption
+changes:
 
-| Arm | Precision | Long / short labels | Trades | Sharpe | CAGR | Max drawdown |
-|---|---|---|---|---|---|---|
-| **Reference** (symmetric barriers, 24-bar hold) | 51.1% | 49.9 / 50.1 | 1,191 | −0.47 | −3.9% | −26.8% |
-| No minimum holding period | 51.1% | 49.9 / 50.1 | 4,905 | **−5.55** | −31.3% | −88.9% |
-| Asymmetric barriers (1.5 / 1.0 ATR) | **53.0%** | 39.6 / 60.0 | 888 | −1.13 | −6.8% | −36.8% |
-| Both defects together | 53.0% | 39.6 / 60.0 | 2,592 | −4.68 | −17.5% | −67.9% |
-| Reference with **zero transaction cost** | 51.1% | 49.9 / 50.1 | 1,191 | **+0.85** | +6.5% | −8.7% |
-
-Nothing about the model changes across those rows.
-
-The third row is the one worth staring at. Making the barriers asymmetric
-*raises* directional precision from 51.1% to 53.0% — and more than doubles the
-loss. The closer barrier is hit more often, the label set tilts 60/40 short,
-and a model that leans short in a market that did not fall scores better on
-the classification metric while losing more money. If you needed one exhibit
-for why accuracy is the wrong objective in this domain, it is that row.
-
-### 4. Regime conditioning did not help here
-
-In all four matched pairs, the k-means arm scored *below* its own control:
-
-| Learner | Control | With regimes | Change |
+| Arm | Precision | Trades | Sharpe |
 |---|---|---|---|
-| Random forest | −0.47 | −0.76 | −0.29 |
-| LightGBM | −0.84 | −1.10 | −0.26 |
-| XGBoost | −1.47 | −1.37 | +0.10 |
-| Logistic regression | −1.64 | −1.79 | −0.15 |
+| **Reference** | 51.0% | 1,206 | −0.37 |
+| No minimum holding period | 51.0% | 4,925 | **−5.51** |
+| Asymmetric barriers (1.5/1.0 ATR) | **52.9%** | 888 | −0.83 |
+| Zero transaction cost | 51.0% | 1,206 | **+0.95** |
 
-Mean change **−0.15 Sharpe**; the regime layer helped in 1 of 4 pairs. On this
-instrument, timeframe and cost structure, the answer to the research question is
-**no** — regime conditioning adds parameters and turnover without adding
-robustness.
+Row 3 is the one to stare at. Making the barriers asymmetric **raises**
+directional precision from 51.0% to 52.9% and more than doubles the loss: the
+closer barrier is hit more often, the labels tilt 60/40 short, and a model that
+leans short in a market that did not fall scores better on the classification
+metric while losing more money. **Any pipeline that selects on validation
+accuracy prefers the worse configuration here.**
 
-That is a finding, not a failure. The framework was built to be capable of
-returning it.
+### 4. The regime effect is not stable enough to have a sign
+
+An earlier version of this table showed regimes hurting in 3 of 4 matched pairs.
+A refactor that changed nothing about the regime logic — only how feature and
+label indices are aligned, moving fold boundaries by a few bars — reversed it to
+regimes *helping* in 3 of 4, mean **+0.06 Sharpe**.
+
+Neither is a finding. **The instability is the finding**: an effect whose sign
+flips under an incidental change is noise, and this study cannot resolve a
+regime effect of the size that might plausibly exist.
+
+### 5. A 28-configuration search for a positive Sharpe
+
+Logged in full in [`reports/improvement_ablation.csv`](reports/improvement_ablation.csv).
+Execution levers, meta-labelling (a rule picks the direction, the model picks
+the trades), seven primary rules, four learners, seed ensembling, slower
+timeframes.
+
+- Best arm: **+0.28 Sharpe**, 95% CI **[−0.78, +1.33]**, deflated Sharpe
+  **0.000**.
+- **5 of 28 arms positive** — fewer than the ~14 that chance alone would produce,
+  so the population of configurations is centred below zero.
+- The same configuration measured with 6 folds instead of 3: **+0.13 → −0.13**.
+
+**The holdout.** The winner, re-run on instruments the search never touched:
+first on two (GBPUSD **+0.74**, GOLD **+0.85** — both positive, both *better*
+than where it was tuned), then on ten:
+
+**5 of 10 positive. Median Sharpe −0.11. Sign test p = 0.62.**
+
+It did not survive. The two-instrument holdout had simply landed on the two best
+of ten — **a holdout that is too small is not a check, it is another lottery
+ticket.** Reproduce with `python scripts/run_improvement_study.py --holdout`.
 
 ### What the finding is not
 
-It is not "machine learning does not work in markets". It is a bounded claim
-about one instrument, one timeframe, one feature set and one cost assumption.
-The obvious places to push next are named in [docs/findings.md](docs/findings.md).
+Not "machine learning does not work in markets". It is a bounded claim about one
+instrument class, one timeframe, one feature set and one cost assumption. Where
+to push next is set out in [docs/findings.md](docs/findings.md) §6.
 
 ---
 
@@ -131,21 +140,18 @@ The obvious places to push next are named in [docs/findings.md](docs/findings.md
 qmr console          # or: streamlit run app/main.py
 ```
 
-Seven views over the same library:
-
 | Tab | What it is for |
 |---|---|
-| **Overview** | The question, the pipeline, and the design decisions that determine the answer |
-| **Data** | Price and features, return distribution, and the target the models are asked to predict |
-| **Regimes** | Fit a detector; measure persistence, distinctness and stability of the states it finds |
+| **Overview** | The question, the pipeline, and the decisions that determine the answer |
+| **Data** | Price and features, return distribution, and the prediction target |
+| **Regimes** | Fit a detector; measure persistence, distinctness and stability |
 | **Run a study** | Configure and launch a walk-forward experiment, with a live log |
-| **Results** | Full out-of-sample report: economics, fold stability, regime breakdown, feature importance, significance |
-| **Model comparison** | Every stored study side by side, with regime arms paired against their own controls |
-| **Signals** | Out-of-sample positions on the chart, bar by bar, with the model's conviction over time |
+| **Results** | Economics, fold stability, regime breakdown, feature importance, significance |
+| **Model comparison** | Every stored study side by side, regime arms paired against their controls |
+| **Signals** | Out-of-sample positions on the chart, with the model's conviction over time |
 
-Everything the console can produce is reachable from the CLI, and every study it
-runs is written to `experiments/<run_id>/` with the exact configuration that
-produced it.
+Everything the console produces is reachable from the CLI, and every study is
+written to `experiments/<run_id>/` with the exact configuration that produced it.
 
 ---
 
@@ -157,8 +163,8 @@ cd quant-market-regime-research
 python -m pip install -e .
 ```
 
-Python 3.10 or later. Optional extras: `pip install -e ".[sequence]"` for the
-LSTM/GRU learners, `".[mt5]"` for MetaTrader 5 history export.
+Python 3.10+. Optional extras: `".[sequence]"` for the LSTM/GRU learners,
+`".[mt5]"` for MetaTrader 5 export.
 
 Trimmed sample datasets for EURUSD, GBPUSD and GOLD ship with the repository, so
 a fresh clone runs immediately:
@@ -169,8 +175,8 @@ qmr run          # one study with the default configuration
 qmr console      # the research console
 ```
 
-For the full history, drop broker CSVs named
-`SYMBOL_TIMEFRAME_YYYYMMDD_YYYYMMDD.csv` into `data/raw`, or pull them directly:
+For full history, drop broker CSVs named
+`SYMBOL_TIMEFRAME_YYYYMMDD_YYYYMMDD.csv` into `data/raw`, or:
 
 ```bash
 qmr export-mt5 --symbols EURUSD,GBPUSD,GOLD --timeframes H1,H4,D1
@@ -188,15 +194,22 @@ qmr results                                        # every stored run
 qmr show <run_id>                                  # one run in full
 ```
 
-Any configuration key can be overridden from the command line:
+Any configuration key can be overridden:
 
 ```bash
 qmr run \
-  --set data.symbol=GOLD \
-  --set data.timeframe=H4 \
-  --set labeling.horizon=12 \
-  --set backtest.min_holding_bars=12 \
-  --set validation.n_folds=8
+  --set labeling.method=meta \
+  --set labeling.primary=ma_crossover \
+  --set model.top_k_features=20 \
+  --set backtest.volatility_target=0.10
+```
+
+Study scripts:
+
+```bash
+python scripts/demo_lookahead_bias.py --start 2020-01-01   # price the cost of a leak
+python scripts/run_improvement_study.py --fresh            # the 28-arm search
+python scripts/run_improvement_study.py --holdout          # validate the winner
 ```
 
 ---
@@ -204,35 +217,32 @@ qmr run \
 ## What the framework does that most do not
 
 **Causal features, checked.** Swing points are reported on the bar that
-*confirms* them, not the bar they occurred on. The conventional
-`argrelextrema` pivot tells the model where the top was before the top formed —
-the fastest route to a backtest that cannot be reproduced live.
+*confirms* them, not the bar they occurred on. `scripts/demo_lookahead_bias.py`
+measures what breaking that is worth: a subtle 5-bar leak is worth +0.38 Sharpe
+and looks entirely unremarkable, which is why it is the one that gets shipped.
 
 **Everything refitted inside the fold.** The regime detector, the scaler, the
-imputer and the classifier see the training window only. Clustering once on the
-full sample and then evaluating "out of sample" within those clusters leaks the
-entire future into the regime assignment, and produces the most convincing-looking
-chart in the field.
+imputer, the feature selector and the classifier see the training window only.
 
 **An embargo between train and test.** A label on the last training bar is a
-function of the next *h* bars, which are the first bars of the test window. The
-tail of each training window is purged.
+function of the next *h* bars, which are the first bars of the test window.
 
 **Path-aware labels.** The triple barrier follows each hypothetical position
-forward until it touches a profit barrier, a loss barrier or the time limit, in
-ATR units. A fixed-horizon return sign rewards the model for calling a move a
-real position would have been stopped out of.
+until it touches a profit barrier, a loss barrier or the time limit, in ATR
+units. Meta-labelling goes further: a rule proposes the trade and the model only
+decides whether to take it.
 
-**Honest execution.** Fills at the next bar's open, never the close that produced
-the signal. Costs on every change in position, so a long-to-short flip pays
-twice. A minimum holding period, because a horizon-ahead forecast is one opinion.
+**Honest execution.** Fills at the next bar's open. Costs on every change in
+position, so a long-to-short flip pays twice. A minimum holding period, because
+a horizon-ahead forecast is one opinion, not one per bar.
 
 **Benchmarks that are not handicapped.** Buy-and-hold plus four rule-based
-strategies, priced through the identical execution model and costs.
+strategies, through the identical execution model and costs.
 
-**Significance, three ways.** A stationary-bootstrap confidence interval that
-preserves autocorrelation; a probabilistic Sharpe ratio corrected for skew and
-kurtosis; a deflated Sharpe ratio that discounts for the number of trials.
+**Significance, four ways.** A stationary-bootstrap confidence interval that
+preserves autocorrelation; a probabilistic Sharpe corrected for skew and
+kurtosis; a deflated Sharpe that discounts for the number of trials; and a
+cross-instrument holdout with a sign test.
 
 ---
 
@@ -241,10 +251,11 @@ kurtosis; a deflated Sharpe ratio that discounts for the number of trials.
 | Document | Contents |
 |---|---|
 | [docs/novice_learner.md](docs/novice_learner.md) | **New to Python?** Learn the codebase from a trader's starting point |
+| [docs/code_orchestration_to_output.md](docs/code_orchestration_to_output.md) | **How it runs.** One command traced end to end: every file, call and table |
 | [docs/methodology.md](docs/methodology.md) | Every assumption, and the reasoning behind it |
 | [docs/architecture.md](docs/architecture.md) | Module layout, data flow, extension points |
-| [docs/findings.md](docs/findings.md) | Full results and where the study goes next |
-| [reports/](reports/) | The result tables as CSV, with the commands that produced them |
+| [docs/findings.md](docs/findings.md) | Full results, the 28-arm ledger, and where the study goes next |
+| [reports/](reports/) | Result tables as CSV, with the commands that produced them |
 
 ---
 
@@ -258,14 +269,15 @@ data:      { symbol: EURUSD, timeframe: H1, warmup_bars: 300 }
 features:  { blocks: [returns, trend, momentum, volatility, structure, volume, session] }
 labeling:  { method: triple_barrier, horizon: 24, take_profit_atr: 1.0, stop_loss_atr: 1.0 }
 regime:    { method: kmeans, n_regimes: 4, as_model_feature: true }
-model:     { name: xgboost, decision_threshold: 0.50, class_balance: true }
+model:     { name: xgboost, decision_threshold: 0.50, top_k_features: null, n_seeds: 1 }
 validation:{ scheme: expanding, n_folds: 6, test_size: 0.12, embargo_bars: 48 }
-backtest:  { cost_bps: 2.0, slippage_bps: 0.5, execution_lag: 1, min_holding_bars: 24 }
+backtest:  { cost_bps: 2.0, slippage_bps: 0.5, min_holding_bars: 24, volatility_target: null }
 ```
 
-Learners available: `logistic`, `random_forest`, `hist_gradient_boosting`,
-`xgboost`, `lightgbm`, `mlp`, and `lstm` / `gru` with the `sequence` extra.
+Learners: `logistic`, `random_forest`, `hist_gradient_boosting`, `xgboost`,
+`lightgbm`, `mlp`, and `lstm` / `gru` with the `sequence` extra.
 Regime detectors: `none`, `rule`, `kmeans`, `gmm`.
+Labelling: `triple_barrier`, `directional`, `meta`.
 
 ---
 

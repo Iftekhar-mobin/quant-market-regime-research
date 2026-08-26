@@ -97,6 +97,8 @@ eighty features yields a partition nobody can defend.
 
 ## 4. Labels
 
+Three schemes are available: `directional`, `triple_barrier` and `meta`.
+
 ### 4.1 The triple barrier
 
 From each bar, a hypothetical position is followed forward until it touches an
@@ -117,7 +119,7 @@ and gets hit more often; the label set tilts short, and the model inherits a
 directional bias that has nothing to do with the market.
 
 Measured, this costs more than it looks: the tilt raises directional precision
-from 51.1% to 53.0% while taking the Sharpe ratio from −0.47 to −1.13. The
+from 51.0% to 52.9% while taking the Sharpe ratio from −0.37 to −0.83. The
 classification metric improves because the majority class is easier to guess,
 and the strategy loses twice as much. The default is 1.0 / 1.0 for exactly this
 reason, and the console warns when the label balance drifts by more than five
@@ -126,7 +128,39 @@ percentage points.
 **Both barriers in one bar.** The intrabar path is unknown, so the adverse
 outcome is assumed. That is conservative by design.
 
-### 4.2 Labels look forward; features must not
+### 4.2 Meta-labelling
+
+Direct direction prediction is hard, and the accuracy it reaches here (~51%)
+does not cover the spread. Meta-labelling changes the question rather than
+trying harder at the same one.
+
+A **primary rule** — by default a moving-average crossover — proposes both the
+direction and the timing. The learner is then asked only: *will this particular
+trade work?* The label is the primary side when the trade would have won and 0
+when it would have lost; bars where the rule proposes nothing are dropped.
+
+Three reasons this is an easier problem:
+
+1. The direction is no longer the learner's responsibility.
+2. The training set contains only bars where a trade was actually proposed, so
+   it is not diluted by the majority of bars where nothing was happening.
+3. A filter that removes bad trades raises precision *and* cuts turnover — the
+   two levers this study most needs.
+
+At prediction time the learner may **veto** a trade the rule proposed but can
+never invent one of its own:
+
+```python
+predicted = predicted.where(predicted == fold_primary, 0)
+```
+
+Because meta labels exist only on proposed bars while the backtest needs an
+unbroken bar series, the runner keeps every bar, trains on the labelled subset
+and scores the whole test window.
+
+Reference: López de Prado, *Advances in Financial Machine Learning*, ch. 3.
+
+### 4.3 Labels look forward; features must not
 
 Every label at bar *t* is a function of bars after *t*. That is correct for a
 target and fatal for a feature. Keeping the two apart is the job of the embargo.
@@ -154,8 +188,8 @@ the horizon by default.
 
 ### 5.3 Everything is refitted inside the fold
 
-The regime detector, the feature scaler, the imputer and the classifier are all
-fitted on the training window alone.
+The regime detector, the feature scaler, the imputer, the **feature selector**
+and the classifier are all fitted on the training window alone.
 
 Two leaks this prevents, both common and both invisible in the metrics:
 
@@ -181,15 +215,17 @@ describing the market, not scoring a strategy — and says so on screen.
 | Round trip | 5.0 bps | Entry plus exit. A long-to-short flip is two transactions and pays twice. |
 | Minimum hold | = label horizon | See below. |
 | Sizing | fixed fraction of capital | Keeps the comparison about signal quality, not leverage. |
+| Volatility target | off by default | When enabled, positions are sized inversely to trailing volatility and the size is **fixed at entry**, so targeting does not generate rebalancing costs. |
+| Session filter | off by default | When enabled, new entries are restricted to nominated hours. Spreads are widest in thin hours and a constant cost assumption understates that. |
 
 **The minimum holding period is not a detail.** A model trained on a 24-bar-ahead
 target expresses one opinion about the next 24 bars, not 24 independent
 opinions. Acting on its output every bar pays the spread 24 times to hold what
 is economically a single position. In the controlled ablation in
 [findings.md](findings.md#3-execution-assumptions-move-the-result-more-than-the-model-does),
-removing the minimum hold moved the out-of-sample Sharpe from −0.47 to −5.55 on
-an identical signal — same model, same labels, same folds, 1,191 trades becoming
-4,905. That is the cost of re-deciding, and nothing else.
+removing the minimum hold moved the out-of-sample Sharpe from −0.37 to −5.51 on
+an identical signal — same model, same labels, same folds, 1,206 trades becoming
+4,925. That is the cost of re-deciding, and nothing else.
 
 Flipping from long to short pays the cost twice, because it is two transactions.
 
@@ -220,7 +256,7 @@ cost per trade           =  2 × (spread + slippage)
 At a per-bar volatility of 10.3 bps and a 24-bar hold, the typical absolute move
 is about 50 bps, which puts the break-even hit rate near 55%. The models reach
 51%. Measured directly from the zero-cost ablation arm, the signal is worth
-+3.70 bps a trade against a 5.00 bps round trip: **real, and smaller than the
++4.28 bps a trade against a 5.00 bps round trip: **real, and smaller than the
 spread.**
 
 This single calculation explains most published retail results, and it is why
@@ -248,7 +284,38 @@ one-sided t-test on the fold means, are reported alongside the pooled number.
 
 ---
 
-## 8. Threats to validity
+## 8. Searching for a result without fooling yourself
+
+Once a study can be run in a minute, the binding constraint stops being compute
+and becomes discipline. Twenty-eight configurations were tried in the
+improvement programme ([findings.md](findings.md) §5), and every one of them is
+a trial that inflates the best result.
+
+Four defences are built in, in increasing order of strength:
+
+1. **Every arm is logged**, including failures, to
+   `reports/improvement_ablation.csv`. The trial count is auditable rather than
+   implied by whatever the author chose to mention.
+2. **The deflated Sharpe ratio** discounts the headline by the number of arms
+   actually run.
+3. **Re-measurement.** Running the winning configuration with more folds, more
+   history or more seeds is not another search — it is the same hypothesis
+   measured more carefully. A result that moves under that is noise. (The
+   leading arm went from +0.13 with 3 folds to −0.27 with 6 folds, 5 seeds and a
+   longer window.)
+4. **A cross-instrument holdout with a sign test.** The winner is re-run on
+   instruments the search never touched, and judged by a binomial test against a
+   coin flip rather than by eye.
+
+The holdout must be **large enough**. The first attempt used two instruments,
+both came back strongly positive, and it was tempting to stop there. Expanding
+to ten showed 5 positive, 5 negative, sign test p = 0.62 — the two-instrument
+version had landed on the two best of ten. A holdout that is too small is not a
+check; it is another lottery ticket.
+
+---
+
+## 9. Threats to validity
 
 Stated plainly, because a study that lists none has not looked.
 
@@ -259,9 +326,9 @@ Stated plainly, because a study that lists none has not looked.
    optimism.
 3. **Survivorship in instrument choice.** The majors were chosen because history
    was available, not at random.
-4. **Multiple comparisons.** Every configuration tried is a trial. The deflated
-   Sharpe corrects for the folds within one study, not for the whole research
-   programme across sessions.
+4. **Multiple comparisons.** Every configuration tried is a trial. The
+   deflated Sharpe corrects for the arms within one programme, not for every
+   configuration ever run across sessions. Section 8 is the fuller answer.
 5. **Regime label instability.** Cluster identities can permute between refits.
    Names are derived from centroid geometry rather than cluster index to
    mitigate this, but a regime named "quiet range" in one fold is not guaranteed

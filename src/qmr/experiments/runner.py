@@ -252,9 +252,33 @@ def run_experiment(
     report(0.20, f"Labelling targets ({config.labeling.method})")
     label_result = build_labels(features, config.labeling)
 
-    shared_index = features.index.intersection(label_result.labels.index)
-    features = features.loc[shared_index]
-    labels = label_result.labels.loc[shared_index]
+    # Labels may cover fewer bars than the features do. Under `meta` labelling
+    # only the bars where the primary rule proposed a trade carry a target,
+    # while the backtest still needs an unbroken bar series to compute returns.
+    # So the study keeps every bar, trains on the labelled subset, and scores
+    # every bar in the test window.
+    labelled_index = features.index.intersection(label_result.labels.index)
+    if labelled_index.empty:
+        raise ValueError(
+            "Labelling produced no usable targets. With labeling.method='meta' this "
+            "usually means the primary rule never proposed a trade in this window."
+        )
+
+    # Trim the tail the labeller could not reach, so no fold is scored on bars
+    # that have no answer at all.
+    features = features.loc[: labelled_index[-1]]
+    labels = label_result.labels.reindex(features.index)
+    primary_signal = (
+        label_result.primary.reindex(features.index).fillna(0.0)
+        if label_result.primary is not None
+        else None
+    )
+    log.info(
+        "Labelled %d of %d bars (%.0f%%)",
+        int(labels.notna().sum()),
+        len(features),
+        labels.notna().mean() * 100,
+    )
 
     model_features = feature_columns(features)
     if not model_features:
@@ -284,8 +308,14 @@ def run_experiment(
 
         train_features_all = features.iloc[fold.train_slice]
         test_features_all = features.iloc[fold.test_slice]
-        train_labels = labels.iloc[fold.train_slice]
-        test_labels = labels.iloc[fold.test_slice]
+        # Train on the bars that carry a label; score every bar in the test
+        # window so the backtest sees a continuous series.
+        train_labels = labels.iloc[fold.train_slice].dropna().astype(int)
+        test_labels = labels.iloc[fold.test_slice].fillna(0).astype(int)
+
+        if train_labels.nunique() < 2:
+            log.warning("Fold %d has fewer than two label classes; skipping", fold.index + 1)
+            continue
 
         # 4a. regimes: fitted on the training window, applied to both.
         detector = build_detector(config.regime, random_state=config.experiment.seed)
@@ -304,13 +334,26 @@ def run_experiment(
             train_X = pd.concat([train_X, _one_hot_regimes(train_regimes, n_regimes)], axis=1)
             test_X = pd.concat([test_X, _one_hot_regimes(test_regimes, n_regimes)], axis=1)
 
-        # 4c. fit and score.
-        models = _fit_fold_models(train_X, train_labels, train_regimes, config)
+        # 4c. fit and score. The learner only ever sees labelled training rows.
+        fit_index = train_X.index.intersection(train_labels.index)
+        models = _fit_fold_models(
+            train_X.loc[fit_index],
+            train_labels.loc[fit_index],
+            train_regimes.loc[fit_index],
+            config,
+        )
         probabilities = _predict_fold(models, test_X, test_regimes)
 
         predicted = signals_from_probabilities(
             probabilities, config.model.decision_threshold
         ).astype(int)
+
+        if primary_signal is not None:
+            # Meta-labelling: the learner may veto a trade the primary rule
+            # proposed, but never invent one of its own. Anything that does not
+            # agree with the rule becomes flat.
+            fold_primary = primary_signal.reindex(test_features_all.index).fillna(0.0)
+            predicted = predicted.where(predicted == fold_primary.astype(int), 0).astype(int)
 
         fold_frame = pd.DataFrame(
             {

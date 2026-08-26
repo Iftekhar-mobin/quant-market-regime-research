@@ -640,6 +640,10 @@ swing           51.0%     -0.76     -6.0%    -15.9%      456   realised_vol_14
 future          76.9%     +3.87     36.0%     -5.1%      525   tomorrow_close
 ```
 
+*(Your exact numbers will differ slightly — the pipeline has been refactored
+since this table was captured. The gaps between the rows are what matter, and
+those are stable.)*
+
 - **honest** — the pipeline as shipped.
 - **swing** — swing pivots reported on the bar they occurred instead of the bar
   that confirms them. A 5-bar leak, through only 5 of the ~84 features.
@@ -680,6 +684,17 @@ def price_position(close: pd.Series, window: int = 50) -> pd.Series:
 
 Then use it in `_momentum_block` in `features/pipeline.py` and see whether it
 appears in the feature-importance chart in the console.
+
+**4b. Try a different question.** The framework can also ask the model *"will this rule-based trade work?"* instead of *"which way next?"* — that is meta-labelling. Compare the two:
+
+```bash
+qmr run --set validation.n_folds=3
+qmr run --set validation.n_folds=3 --set labeling.method=meta
+```
+
+Watch the trade count collapse. Fewer, more selective trades pay less
+spread — which, as [findings.md](findings.md) shows, is the whole game
+here.
 
 **5. Write your own strategy.** Add a function to `models/baselines.py` and
 register it, and it will be priced against every model automatically, through
@@ -759,6 +774,11 @@ embargoes, realistic costs, confidence intervals. The machine learning is the
 easy 10%.
 
 ---
+
+*Read next: [code_orchestration_to_output.md](code_orchestration_to_output.md)
+traces one command end to end - every file that wakes up, every function it
+calls, and the exact shape of the data at each step. This guide taught you the
+language; that one shows you the machine.*
 
 *See also: [methodology.md](methodology.md) for the assumptions and why they
 were chosen, [architecture.md](architecture.md) for how the modules fit

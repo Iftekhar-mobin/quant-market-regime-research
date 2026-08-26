@@ -29,13 +29,20 @@ features:
   trend_windows: [20, 50, 200]
 
 labeling:
-  # directional | triple_barrier
+  # directional | triple_barrier | meta
+  #   directional    sign of the forward return, with a volatility dead band
+  #   triple_barrier which of a profit / loss / time barrier is touched first
+  #   meta           a rule picks the direction, the learner picks the trades
   method: triple_barrier
   horizon: 24            # maximum holding period, in bars
   atr_window: 14
   take_profit_atr: 1.0   # upper barrier, in ATR units
   stop_loss_atr: 1.0     # lower barrier, in ATR units
   deadband_atr: 0.25     # `directional` only: |return| below this becomes flat
+  # `meta` only: the rule-based strategy that supplies the direction. The
+  # learner is then asked only whether each of its trades is worth taking.
+  # Any key from qmr.models.baselines.BASELINES works here.
+  primary: ma_crossover
 
 regime:
   # none | rule | kmeans | gmm
@@ -56,6 +63,13 @@ model:
   decision_threshold: 0.50
   # Balance the training classes by sample weighting.
   class_balance: true
+  # Keep only the k most important features, ranked on each training fold.
+  # null keeps all of them. Fewer features means fewer chances for a tree to
+  # split on an accident.
+  top_k_features: null
+  # Average the probabilities of this many models differing only by seed.
+  # Damps the wobble near the decision threshold, which is turnover.
+  n_seeds: 1
 
 validation:
   # expanding | rolling
@@ -80,6 +94,16 @@ backtest:
   # 12-bar-ahead forecast pays the spread twelve times for one opinion.
   min_holding_bars: 24
   bars_per_year: 6240    # H1 forex: 24 * 260
+  # Annualised volatility to size positions towards; null takes every
+  # position at full size. Sizing is fixed at entry and held for the trade,
+  # so it does not generate rebalancing costs.
+  volatility_target: null
+  volatility_window: 100
+  max_leverage: 3.0
+  # Restrict new entries to these hours of the day. Empty trades around the
+  # clock. FX spreads are widest in the thin hours and a constant cost
+  # assumption understates that.
+  session_hours: []
 
 evaluation:
   bootstrap_samples: 1000
