@@ -240,6 +240,7 @@ kurtosis; a deflated Sharpe ratio that discounts for the number of trials.
 
 | Document | Contents |
 |---|---|
+| [docs/novice_learner.md](docs/novice_learner.md) | **New to Python?** Learn the codebase from a trader's starting point |
 | [docs/methodology.md](docs/methodology.md) | Every assumption, and the reasoning behind it |
 | [docs/architecture.md](docs/architecture.md) | Module layout, data flow, extension points |
 | [docs/findings.md](docs/findings.md) | Full results and where the study goes next |
