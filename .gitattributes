@@ -14,3 +14,4 @@ Makefile text eol=lf
 *.csv      text eol=lf
 *.parquet  binary
 *.png      binary
+*.gif      binary

@@ -24,12 +24,11 @@ about its own most promising result.
 **Try it without installing anything — the console is live at
 [quant-market-regime-research.streamlit.app](https://quant-market-regime-research.streamlit.app).**
 
-[![The research console, Overview tab](docs/images/console-overview.png)](https://quant-market-regime-research.streamlit.app)
+[![A walkthrough of the research console: Overview, Run a study, Regimes, Results, Signals](docs/images/console-walkthrough.gif)](https://quant-market-regime-research.streamlit.app)
 
-<sub>The Overview tab states the question, the pipeline and the four design
-decisions that determine the answer, then loads the dataset it will be asked
-about — 51,060 EURUSD H1 bars, excess kurtosis 14.4, which is why this framework
-reports a bootstrap confidence interval rather than a Sharpe ratio alone.</sub>
+<sub>Five of the seven tabs: state the question, configure a study, measure
+whether the regimes are even tradeable, read the result, and put the
+out-of-sample calls back on the price. Each tab is shown in full below.</sub>
 
 ---
 
@@ -175,6 +174,15 @@ qmr console          # or: streamlit run app/main.py
 | **Results** | Economics, fold stability, regime breakdown, feature importance, significance |
 | **Model comparison** | Every stored study side by side, regime arms paired against their controls |
 | **Signals** | Out-of-sample positions on the chart, with the model's conviction over time |
+
+### Start from the question, and the data it will be asked about
+
+![The Overview tab](docs/images/console-overview.png)
+
+<sub>The pipeline and the four design decisions that determine the answer, over
+the dataset itself — 51,060 EURUSD H1 bars at excess kurtosis 14.4, which is why
+this framework reports a bootstrap confidence interval rather than a Sharpe ratio
+alone.</sub>
 
 ### Configure a study, and see what you are assuming
 
