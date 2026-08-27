@@ -27,6 +27,8 @@ Docker Space, so it works the moment a PRO plan exists.
 
 ## Streamlit Community Cloud
 
+**Live instance: https://quant-market-regime-research.streamlit.app**
+
 ### One-time setup
 
 1. Go to **https://share.streamlit.io** and sign in with GitHub.

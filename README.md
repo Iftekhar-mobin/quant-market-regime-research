@@ -1,5 +1,9 @@
 # Quantitative Market Regime Research
 
+[![Live console](https://img.shields.io/badge/live%20console-streamlit-FF4B4B?logo=streamlit&logoColor=white)](https://quant-market-regime-research.streamlit.app)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-3776AB?logo=python&logoColor=white)](pyproject.toml)
+
 A research framework for testing whether **market regimes** — persistent states
 of trend, volatility and structure — make systematic strategies more robust out
 of sample.
@@ -16,6 +20,16 @@ about its own most promising result.
          ->  walk-forward CV  ->  directional model  ->  backtest with costs
          ->  risk analysis    ->  significance tests
 ```
+
+**Try it without installing anything — the console is live at
+[quant-market-regime-research.streamlit.app](https://quant-market-regime-research.streamlit.app).**
+
+[![The research console, Overview tab](docs/images/console-overview.png)](https://quant-market-regime-research.streamlit.app)
+
+<sub>The Overview tab states the question, the pipeline and the four design
+decisions that determine the answer, then loads the dataset it will be asked
+about — 51,060 EURUSD H1 bars, excess kurtosis 14.4, which is why this framework
+reports a bootstrap confidence interval rather than a Sharpe ratio alone.</sub>
 
 ---
 
@@ -65,6 +79,8 @@ The identical signal, run with costs switched off:
 | Reference | −17.1% | **−1.41 bps** | −0.37 | −26.9% |
 | Zero transaction cost | +51.6% | **+4.28 bps** | **+0.95** | −9.7% |
 
+![Gross edge +4.28 bps, cost −5.00 bps, what is left −1.41 bps](docs/images/result-cost-arithmetic.png)
+
 Out of sample, on bars it had never seen, the model earns **+4.28 bps per trade
 — a Sharpe of 0.95 with a single-digit drawdown**. The round trip costs 5.0 bps.
 The edge is real and smaller than the toll.
@@ -85,12 +101,16 @@ changes:
 | Asymmetric barriers (1.5/1.0 ATR) | **52.9%** | 888 | −0.83 |
 | Zero transaction cost | 51.0% | 1,206 | **+0.95** |
 
+![The same signal and folds under five execution assumptions, from +0.95 to −5.51 Sharpe](docs/images/result-execution-assumptions.png)
+
 Row 3 is the one to stare at. Making the barriers asymmetric **raises**
 directional precision from 51.0% to 52.9% and more than doubles the loss: the
 closer barrier is hit more often, the labels tilt 60/40 short, and a model that
 leans short in a market that did not fall scores better on the classification
 metric while losing more money. **Any pipeline that selects on validation
 accuracy prefers the worse configuration here.**
+
+![Accuracy rises 51.0% to 52.9% while Sharpe falls −0.37 to −0.83](docs/images/result-precision-paradox.png)
 
 ### 4. The regime effect is not stable enough to have a sign
 
@@ -122,6 +142,8 @@ than where it was tuned), then on ten:
 
 **5 of 10 positive. Median Sharpe −0.11. Sign test p = 0.62.**
 
+![Ten instruments ranked by out-of-sample Sharpe; the two-asset holdout had picked the top two](docs/images/result-holdout.png)
+
 It did not survive. The two-instrument holdout had simply landed on the two best
 of ten — **a holdout that is too small is not a check, it is another lottery
 ticket.** Reproduce with `python scripts/run_improvement_study.py --holdout`.
@@ -136,13 +158,13 @@ to push next is set out in [docs/findings.md](docs/findings.md) §6.
 
 ## The research console
 
+**Live on Streamlit Community Cloud: [quant-market-regime-research.streamlit.app](https://quant-market-regime-research.streamlit.app)**
+
+Or run it locally against your own market history:
+
 ```bash
 qmr console          # or: streamlit run app/main.py
 ```
-
-A hosted instance runs on Streamlit Community Cloud — see
-[docs/deployment.md](docs/deployment.md) for how it is deployed, and for why a
-Hugging Face Space is no longer a free option for anything that runs Python.
 
 | Tab | What it is for |
 |---|---|
@@ -154,8 +176,48 @@ Hugging Face Space is no longer a free option for anything that runs Python.
 | **Model comparison** | Every stored study side by side, regime arms paired against their controls |
 | **Signals** | Out-of-sample positions on the chart, with the model's conviction over time |
 
+### Configure a study, and see what you are assuming
+
+![The Run a study tab](docs/images/console-run-study.png)
+
+<sub>Learner, detector, labelling, horizon and folds in one place. The execution
+assumptions — costs, fill timing, minimum holding period — are a panel of their
+own rather than a buried default, because §3 above is what they are worth.</sub>
+
+### Read the result, including when it is bad
+
+![The Results tab](docs/images/console-results.png)
+
+<sub>Sharpe −0.62, precision 50.9%, and a banner that says so in as many words:
+*"Negative out of sample. The honest conclusion is that this configuration has no
+edge — which is a finding, not a failure."* An interface that only looks good
+when the numbers do is one that will eventually be made to look good.</sub>
+
+### Measure whether a regime is even tradeable
+
+![The Regimes tab](docs/images/console-regimes.png)
+
+<sub>Persistence 90.8%, median run **4 bars** — against a 24-bar minimum holding
+period. The state usually changes several times inside a single position, which
+is most of the answer to the research question. The page warns that it fits the
+detector on the whole window for description only; in a study it is refitted
+inside every fold.</sub>
+
+### Put the out-of-sample calls back on the price
+
+![The Signals tab](docs/images/console-signals.png)
+
+<sub>Every marker was produced by a model that had never seen the bar it is
+trading, and executed at the *next* bar's open. 10,991 positions over 13,725
+scored bars.</sub>
+
 Everything the console produces is reachable from the CLI, and every study is
-written to `experiments/<run_id>/` with the exact configuration that produced it.
+written to `experiments/<run_id>/` with the exact configuration that produced it,
+so a result is reproducible rather than a screenshot.
+
+See [docs/deployment.md](docs/deployment.md) for how the hosted instance is
+deployed, and for why a Hugging Face Space is no longer a free option for
+anything that runs Python.
 
 ---
 
